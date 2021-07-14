@@ -1,113 +1,99 @@
-import 'package:flutter/material.dart';
+import 'package:path/path.dart';
+import 'package:path/path.dart;
+import 'package:sqflite/sqflite.dart';
+import 'package:sqflite_db_connection/model/note.dart';
 
-void main() {
-  runApp(MyApp());
-}
 
-class MyApp extends StatelessWidget {
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // Try running your application with "flutter run". You'll see the
-        // application has a blue toolbar. Then, without quitting the app, try
-        // changing the primarySwatch below to Colors.green and then invoke
-        // "hot reload" (press "r" in the console where you ran "flutter run",
-        // or simply save your changes to "hot reload" in a Flutter IDE).
-        // Notice that the counter didn't reset back to zero; the application
-        // is not restarted.
-        primarySwatch: Colors.blue,
-      ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
+class DataBase{
+  static final DataBase instance=DataBase._init(); /// Global field instance to call constructor 
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key key, this.title}) : super(key: key);
+  static Database _db; // abstract class from sqflite
 
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
+  DataBase._init(); /// Constructor of the class
 
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
+  ///open database
+  Future<Database> get database async{
+    if(_db!=null) return _db;
 
-  final String title;
-
-  @override
-  _MyHomePageState createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+    _db=await _initDB('Notes.db');
+    return _db;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Invoke "debug painting" (press "p" in the console, choose the
-          // "Toggle Debug Paint" action from the Flutter Inspector in Android
-          // Studio, or the "Toggle Debug Paint" command in Visual Studio Code)
-          // to see the wireframe for each widget.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
-    );
+  
+  /// By default,data storage location are specified for Android and iOS. 
+  /// If you want change use Path provider package
+  /// Use path provider to change the data store in iOS and Android.
+
+  /// Initialise the DB
+  Future <Database> _initDB( String filePath) async{
+    // Get DB location 
+    final dbPath=await getDatabasesPath(); 
+    final path=join(dbPath,filePath);
+    
+    ///When there is update in the structure use onUpgrade: 
+    ///And change verison:2 count.
+    return await openDatabase(path,version:1,onCreate:_createDB); // onCreate:- Provide data schema
   }
-}
+
+  /// Create database schema
+  Future _createDB(Database db,int version) async{
+  //Data type of Table attributes
+  final idType='INTEGER PRIMARY KEY AUTOINCREMENT';
+
+  /// Executed only if not 'notes.db' was not created.
+  /// If already existing this db.execute statement won't be executed again.
+  await db.execute('''
+  CREATE TABLE $tableNotes(
+    ${ NoteFields.id} $idType,
+
+  )
+  ''');
+
+  /// <--- Here you can you create multiple datatable --->
+  }
+
+  Future <Note> create(Note note)async{
+
+    final db=await instance.database;
+    
+    //final json=note.toJson();
+    //final columns='${NoteFields.title},${NoteFields.description}';
+    //final values='{json[NoteFields.title]},${json[NoteFields.description]}';
+    //final id=await db.rawInsert('INSERT INTO table_name($columns) VALUES($values)');
+
+
+
+    // Data inserted here and will get an unique id generated by DB
+    // or we can provide unique "id".
+    // The above raw insert code is simply done with the below statement.
+    //Either way is possible.
+    final id= await db.insert(tableNotes, note.toJson());
+
+    // Modifying only the id, which is returned when insertion is done.
+    return note.copy(id:id);
+  }
+
+  // Creating a note we also want to read a note and this is always 
+  // what you need to do with this id(@:70)
+  Future<Note> readNote(int id)async{
+    //Database node object again
+    final db=await instance.database;
+
+    // From which table we want to query so-> tableNotes(table name)
+    // Define the columns to retrieve values from our table
+    final maps=await db.query(tableNotes,columns: NoteFields.values,where: '${NoteFields}=?',whereArgs: [id],);// This ? mark prevents SQL injection attacks
+
+
+
+  }
+
+  /// Close Database after performing all the operation.
+  Future close()async{
+  
+  
+  final db=await instance.database;
+
+  db.close();
+  }
+  
+  }
